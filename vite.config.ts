@@ -1,11 +1,11 @@
-import tailwindcss from '@tailwindcss/postcss';
+import tailwindcss from '@tailwindcss/vite';
 import vinext from 'vinext';
 import { nitro } from 'nitro/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  css: { postcss: { plugins: [tailwindcss()] } },
   plugins: [
+    tailwindcss(),
     vinext(),
     nitro(),
   ],
