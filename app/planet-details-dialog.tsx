@@ -9,6 +9,7 @@ import { planetDetails } from './planet-details';
 import { PlanetKnowledge } from './planet-knowledge';
 import { planetFormation } from './planet-formation';
 import { readingPreview } from './reading-preview';
+import { PlanetImage } from './planet-image';
 
 function ShortNote({ text, language }: { text: string; language: Language }) {
   const preview = readingPreview(text, language, 150);
@@ -42,7 +43,7 @@ export function PlanetDetailsDialog({ bodyIndex, language, className = '' }: { b
           <TabsTrigger value="knowledge"><Sparkles size={15} />{vi ? 'Kiến thức & fact' : 'Learn & facts'}</TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="dossier-panel">
-          <div className="dossier-overview-hero"><div className="dossier-world" aria-hidden="true"><span /></div><div><span className="dossier-mini-label">{vi ? 'NHẬN DIỆN' : 'AT A GLANCE'}</span><h3>{content.category}</h3><p>{vi ? 'Các con số và đặc điểm chính.' : 'The key numbers and defining features.'}</p></div></div>
+          <div className="dossier-overview-hero"><PlanetImage bodyIndex={bodyIndex} className="dossier-planet-image" /><div><span className="dossier-mini-label">{vi ? 'NHẬN DIỆN' : 'AT A GLANCE'}</span><h3>{content.category}</h3><p>{vi ? 'Các con số và đặc điểm chính.' : 'The key numbers and defining features.'}</p></div></div>
           <dl className="dossier-facts">
             <div><dt>{vi ? 'Đường kính' : 'Diameter'}</dt><dd>{body.diameter} <small>km</small></dd></div>
             <div><dt>{vi ? 'Cách Mặt Trời' : 'Distance from Sun'}</dt><dd>{body.au} <small>AU</small></dd></div>
