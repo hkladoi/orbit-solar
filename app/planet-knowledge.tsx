@@ -5,6 +5,7 @@ import { BookOpen, ChevronDown, ExternalLink, Search, X } from 'lucide-react';
 import type { Language } from './i18n';
 import { RandomPlanetFact } from './random-planet-fact';
 import { getFactPool, searchArticleSections, type ArticleTopic, type FactPool } from './wikipedia-facts';
+import { readingPreview } from './reading-preview';
 
 const topics: { id: ArticleTopic | 'all'; en: string; vi: string }[] = [
   { id: 'all', en: 'All topics', vi: 'Tất cả' },
@@ -27,7 +28,7 @@ export function PlanetKnowledge({ bodyIndex, language }: { bodyIndex: number; la
   const [attempt, setAttempt] = useState(0);
   const [topic, setTopic] = useState<ArticleTopic | 'all'>('all');
   const [query, setQuery] = useState('');
-  const [expansion, setExpansion] = useState<'default' | 'all' | 'none'>('default');
+  const [visibleCount, setVisibleCount] = useState(6);
   const retry = () => { setStatus('loading'); setAttempt(value => value + 1); };
 
   useEffect(() => {
@@ -40,28 +41,28 @@ export function PlanetKnowledge({ bodyIndex, language }: { bodyIndex: number; la
 
   const sections = useMemo(() => searchArticleSections(pool?.sections ?? [], topic, query), [pool, topic, query]);
   const availableTopics = topics.filter(item => item.id === 'all' || pool?.sections.some(section => section.topic === item.id));
-  const readingMinutes = pool ? Math.ceil(pool.sections.reduce((total, section) => total + section.paragraphs.join(' ').split(/\s+/u).length, 0) / (vi ? 350 : 220)) : 0;
 
   return <>
     <RandomPlanetFact key={pool?.fetchedAt ?? 'waiting'} pool={pool} status={status} onRetry={retry} language={language} />
     <section className="dossier-section encyclopedia" aria-labelledby={`${id}-title`} aria-busy={status === 'loading'}>
       <div className="encyclopedia-heading"><h3 id={`${id}-title`}><BookOpen size={19} aria-hidden="true" />{vi ? 'Khám phá chuyên sâu' : 'The deeper story'}</h3><span>WIKIPEDIA</span></div>
-      <p className="encyclopedia-intro">{vi ? 'Đọc theo chủ đề hoặc tìm điều bạn muốn biết trong bài viết. Mở từng mục để xem các đoạn nội dung chi tiết.' : 'Browse by topic or search the article for what you want to know. Open a section to read its detailed paragraphs.'}</p>
+      <p className="encyclopedia-intro">{vi ? 'Mỗi thẻ một trích đoạn ngắn. Mở thêm khi bạn tò mò.' : 'One short excerpt per card. Open more when curiosity strikes.'}</p>
       {status === 'loading' && !pool && <output>{vi ? 'Đang tải các chương kiến thức…' : 'Loading the knowledge chapters…'}</output>}
       {status === 'error' && !pool && <div className="encyclopedia-empty"><p>{vi ? 'Chưa tải được bài viết. Phần hình thành và lịch sử khám phá vẫn có sẵn trong hồ sơ.' : 'The article could not be loaded. Formation and exploration summaries remain available in this profile.'}</p><button type="button" onClick={retry}>{vi ? 'Tải lại bài viết' : 'Retry article'}</button></div>}
       {pool && <>
-        <div className="encyclopedia-meta"><span>{pool.sections.length} {vi ? 'mục kiến thức' : 'sections'}</span><span>~{readingMinutes} {vi ? 'phút đọc' : 'min read'}</span><span>{language.toUpperCase()}</span></div>
         <div className="encyclopedia-tools">
-          <div className="encyclopedia-search"><Search size={17} aria-hidden="true" /><input type="search" aria-label={vi ? 'Tìm trong bài viết' : 'Search the article'} placeholder={vi ? 'Tìm: hình thành, lõi, nước, sự sống…' : 'Search: formation, core, water, life…'} value={query} onChange={event => { setQuery(event.target.value); setTopic('all'); }} />{query && <button type="button" onClick={() => setQuery('')} aria-label={vi ? 'Xóa tìm kiếm' : 'Clear search'}><X size={15} /></button>}</div>
-          <fieldset className="encyclopedia-topics"><legend className="sr-only">{vi ? 'Lọc theo chủ đề' : 'Filter by topic'}</legend>{availableTopics.map(item => <button key={item.id} type="button" aria-pressed={topic === item.id} onClick={() => { setTopic(item.id); setExpansion('default'); }}>{item[language]}</button>)}</fieldset>
+          <div className="encyclopedia-search"><Search size={17} aria-hidden="true" /><input type="search" aria-label={vi ? 'Tìm trong bài viết' : 'Search the article'} placeholder={vi ? 'Tìm: hình thành, lõi, nước…' : 'Search: formation, core, water…'} value={query} onChange={event => { setQuery(event.target.value); setTopic('all'); setVisibleCount(6); }} />{query && <button type="button" onClick={() => { setQuery(''); setVisibleCount(6); }} aria-label={vi ? 'Xóa tìm kiếm' : 'Clear search'}><X size={15} /></button>}</div>
+          <fieldset className="encyclopedia-topics"><legend className="sr-only">{vi ? 'Lọc theo chủ đề' : 'Filter by topic'}</legend>{availableTopics.map(item => <button key={item.id} type="button" aria-pressed={topic === item.id} onClick={() => { setTopic(item.id); setVisibleCount(6); }}>{item[language]}</button>)}</fieldset>
         </div>
-        <div className="encyclopedia-results"><output>{sections.length} {vi ? 'mục phù hợp' : 'matching sections'}</output><button type="button" onClick={() => setExpansion(value => value === 'all' ? 'none' : 'all')} disabled={!sections.length}>{expansion === 'all' ? (vi ? 'Thu gọn tất cả' : 'Collapse all') : (vi ? 'Mở tất cả' : 'Expand all')}</button></div>
-        <div className="encyclopedia-chapters" key={`${topic}:${query}:${expansion}`}>
-          {sections.map((section, index) => <details className="encyclopedia-chapter" key={section.id} open={expansion === 'all' || (expansion === 'default' && index === 0) || undefined}>
-            <summary><span><small>{section.path.join(' / ') || (vi ? 'Bài viết' : 'Article')}</small><strong>{section.title}</strong></span><ChevronDown size={17} aria-hidden="true" /></summary>
-            <div className="encyclopedia-prose">{section.paragraphs.map((paragraph, paragraphIndex) => <p key={paragraphIndex}>{paragraph}</p>)}</div>
-          </details>)}
+        <div className="encyclopedia-results"><output>{Math.min(visibleCount, sections.length)} / {sections.length} {vi ? 'thẻ kiến thức' : 'knowledge cards'}</output><span>{language.toUpperCase()} · WIKIPEDIA</span></div>
+        <div className="knowledge-card-grid" key={`${topic}:${query}`}>
+          {sections.slice(0, visibleCount).map(section => <article className="knowledge-card" key={section.id}>
+            <span className="dossier-mini-label">{topics.find(item => item.id === section.topic)?.[language]}</span><h4>{section.title}</h4>
+            <p>{readingPreview(section.paragraphs[0], language)}</p>
+            <details className="dossier-more"><summary>{vi ? 'Đọc thêm' : 'Read more'}<ChevronDown size={13} aria-hidden="true" /></summary><div className="encyclopedia-prose">{section.paragraphs.map((paragraph, paragraphIndex) => <p key={paragraphIndex}>{paragraph}</p>)}</div></details>
+          </article>)}
         </div>
+        {visibleCount < sections.length && <button type="button" className="knowledge-show-more" onClick={() => setVisibleCount(count => count + 6)}>{vi ? 'Xem thêm 6 thẻ' : 'Show 6 more cards'}<ChevronDown size={15} aria-hidden="true" /></button>}
         {!sections.length && <div className="encyclopedia-empty"><p>{vi ? 'Không tìm thấy mục phù hợp. Thử từ khóa ngắn hơn hoặc chọn chủ đề khác.' : 'No matching sections. Try a shorter search or a different topic.'}</p><button type="button" onClick={() => { setQuery(''); setTopic('all'); }}>{vi ? 'Xem tất cả nội dung' : 'Show all content'}</button></div>}
         <footer className="encyclopedia-credit"><a href={pool.sourceUrl} target="_blank" rel="noreferrer">{pool.title} · {vi ? 'Bài gốc' : 'Original article'}<ExternalLink size={13} aria-hidden="true" /></a><p>{vi ? 'Văn bản từ ' : 'Text by '}<a href={pool.historyUrl} target="_blank" rel="noreferrer">{vi ? 'cộng đồng Wikipedia' : 'Wikipedia contributors'}</a> · <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">CC BY-SA 4.0</a>. {vi ? 'Đã sắp xếp theo chủ đề và lược bỏ định dạng, công thức, bảng và danh mục tham khảo. Xem bài gốc để đọc các phần đó và kiểm tra nguồn trích dẫn. Hai phiên bản ngôn ngữ có thể khác nhau.' : 'Organized by topic; formatting, formulas, tables, and reference lists are omitted. See the original for those elements and citations. Language editions may differ.'}</p></footer>
       </>}
