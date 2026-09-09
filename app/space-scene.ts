@@ -32,6 +32,8 @@ export class SpaceScene {
   private layers = { ...defaultSpaceLayers };
   private selected: string | null = null;
   private lastDays=NaN;
+  private centres=new Map<string,THREE.Vector3>();
+  private labelFrame=0;
   private language: Language = 'en';
   private rocks: THREE.InstancedMesh;
   private dust: THREE.Points;
@@ -111,13 +113,14 @@ export class SpaceScene {
       for(let i=0;i<12;i++)positions.push(start.clone().lerp(end,i/12).normalize().multiplyScalar(9000),start.clone().lerp(end,(i+1)/12).normalize().multiplyScalar(9000));
     }
     const line=new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(positions),new THREE.LineBasicMaterial({color:'#7199b5',transparent:true,opacity:.4,depthWrite:false}));node.add(line);
+    const centre=new THREE.Vector3();for(const id of new Set(item.edges!.flat()))centre.add(this.nodes.get(id)!.position);this.centres.set(item.id,centre.normalize().multiplyScalar(9000));
     // The label is also the keyboard-accessible picking target for the whole pattern.
     this.createLabel(item);
   }
   private createLabel(item:SpaceObject){const label=document.createElement('button');label.className=`planet-label space-label space-label-${item.kind}`;label.textContent=item.name.en;label.addEventListener('click',()=>this.select(item.id));this.host.appendChild(label);this.labels.set(item.id,label);}
   position(id:string):THREE.Vector3{
     const item=spaceObjectById.get(id)!;
-    if(item.edges){const center=new THREE.Vector3();const ids=[...new Set(item.edges.flat())];ids.forEach(key=>center.add(this.nodes.get(key)!.position));return center.normalize().multiplyScalar(9000);}
+    if(item.edges)return this.centres.get(id)!.clone();
     return this.nodes.get(id)!.position.clone();
   }
   focus(id:string){this.selected=id;const node=this.nodes.get(id),item=spaceObjectById.get(id);if(node?.userData.modelStatus==='error'&&item)void this.attachCraft(node,item);}
@@ -138,16 +141,25 @@ export class SpaceScene {
     }
   }
   updateLabels(camera:THREE.Camera,width:number,height:number,enabled:boolean){
-    const active=spaceObjectById.get(this.selected??'');const members=new Set(active?.edges?.flat()??[]);const occupied:{x:number;y:number}[]=[];
-    const ordered=[...spaceObjects].sort((a,b)=>Number(b.id===this.selected)-Number(a.id===this.selected));
+    if(performance.now()-this.labelFrame<32)return;this.labelFrame=performance.now();
+    const active=spaceObjectById.get(this.selected??'');
+    const family=active?.edges?active:spaceObjects.find(o=>o.edges?.some(edge=>edge.includes(this.selected??'')));
+    const members=new Set(family?.edges?.flat()??[]);const occupied:{x:number;y:number;width:number}[]=[];
+    const collapsed=this.host.parentElement?.classList.contains('dock-collapsed');
+    const bottom=height-(collapsed?70:245);
+    const panel=this.host.parentElement?.querySelector('.space-readout')?.getBoundingClientRect();
+    const hostRect=this.host.getBoundingClientRect();
+    const ordered=[...spaceObjects].sort((a,b)=>Number(b.id===this.selected)-Number(a.id===this.selected)||Number(members.has(b.id))-Number(members.has(a.id))||Number(b.kind==='constellation')-Number(a.kind==='constellation')||(a.star?.magnitude??0)-(b.star?.magnitude??0));
     for(const item of ordered){
       const label=this.labels.get(item.id)!,position=this.position(item.id),p=position.clone();
       if(item.orbit)p.y+=item.id==='tiangong'?.1:item.orbit.size+.18;
       p.project(camera);const x=(p.x*.5+.5)*width,y=(-p.y*.5+.5)*height+(item.kind==='star'?-20:item.kind==='constellation'?30:0);
       const near=item.orbit?camera.position.distanceTo(this.parents[item.orbit.parent].position)<(item.layer==='missions'?13:24):true;
-      const wanted=item.kind==='star'?(item.id===this.selected||members.has(item.id)):item.kind==='constellation'||near||item.id===this.selected;
-      const visible=enabled&&this.layers[item.layer]&&wanted&&p.z>-1&&p.z<1&&x>30&&x<width-30&&y>105&&y<height-245&&!occupied.some(other=>Math.abs(other.x-x)<100&&Math.abs(other.y-y)<27);
-      label.style.display=visible?'block':'none';if(visible){label.style.left=`${x}px`;label.style.top=`${y}px`;label.classList.toggle('selected',item.id===this.selected);label.dataset.modelStatus=this.nodes.get(item.id)?.userData.modelStatus??'';label.setAttribute('aria-busy',String(label.dataset.modelStatus==='loading'));occupied.push({x,y});}
+      const wanted=item.kind==='star'?(active?.layer==='sky'||item.star!.magnitude<2.5):item.kind==='constellation'||near||item.id===this.selected;
+      const labelWidth=Math.max(60,item.name[this.language].length*7+20);
+      const behindReadout=!!panel&&x+labelWidth/2>panel.left-hostRect.left&&x-labelWidth/2<panel.right-hostRect.left&&y+15>panel.top-hostRect.top&&y-15<panel.bottom-hostRect.top;
+      const visible=enabled&&this.layers[item.layer]&&wanted&&p.z>-1&&p.z<1&&x>30&&x<width-30&&y>105&&y<bottom&&!behindReadout&&!occupied.some(other=>Math.abs(other.x-x)<(other.width+labelWidth)/2&&Math.abs(other.y-y)<28);
+      label.style.display=visible?'block':'none';if(visible){label.style.left=`${x}px`;label.style.top=`${y}px`;label.classList.toggle('selected',item.id===this.selected);label.dataset.modelStatus=this.nodes.get(item.id)?.userData.modelStatus??'';label.setAttribute('aria-busy',String(label.dataset.modelStatus==='loading'));occupied.push({x,y,width:labelWidth});}
     }
   }
   isVisible(id:string){return this.layers[spaceObjectById.get(id)!.layer];}

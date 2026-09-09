@@ -1,3 +1,4 @@
+import skyCatalog from './data/sky-catalog.json';
 import type { Language } from './i18n';
 
 export type LocalText = { en: string; vi: string };
@@ -120,11 +121,18 @@ const constellation = (id: string, name: LocalText, summary: LocalText, edges: [
  facts: [fact('Chart stars', 'Sao trong sơ đồ', String(new Set(edges.flat()).size)), fact('Reference frame', 'Hệ tham chiếu', 'FK5 · J2000'), fact('Sky regions (IAU)', 'Vùng trời (IAU)', '88')],
  history: [event('1922', 'IAU adopted the list of 88 constellations.', 'IAU thông qua danh sách 88 chòm sao.'), event('1930', 'Modern constellation boundaries were published.', 'Công bố ranh giới chòm sao hiện đại.')], sources: [iau,bsc],
 });
-const constellations: SpaceObject[] = [
- constellation('orion', words('Orion', 'Lạp Hộ'), words('The Hunter, recognized by three stars in its belt.', 'Chòm Thợ Săn, dễ nhận ra nhờ ba sao thẳng hàng ở thắt lưng.'), [['betelgeuse','bellatrix'],['bellatrix','mintaka'],['mintaka','rigel'],['rigel','saiph'],['saiph','alnitak'],['alnitak','betelgeuse'],['mintaka','alnilam'],['alnilam','alnitak']]),
- constellation('cassiopeia', words('Cassiopeia', 'Tiên Hậu'), words('Five bright stars sketch a distinctive W in the northern sky.', 'Năm sao sáng phác họa chữ W đặc trưng trên bầu trời phía bắc.'), [['caph','schedar'],['schedar','gamma-cas'],['gamma-cas','ruchbah'],['ruchbah','segin']]),
- constellation('ursa-major', words('Ursa Major · Big Dipper', 'Đại Hùng · Bắc Đẩu'), words('The Big Dipper is a seven-star asterism within the larger constellation Ursa Major.', 'Bắc Đẩu là hình sao gồm bảy sao thuộc chòm Đại Hùng rộng hơn.'), [['dubhe','merak'],['merak','phecda'],['phecda','megrez'],['megrez','dubhe'],['megrez','alioth'],['alioth','mizar'],['mizar','alkaid']]),
-];
-export const spaceObjects: SpaceObject[] = [...constellations, ...satellites, ...missions, ...asteroids, ...stars];
+const skySource = { label: 'd3-celestial · star charts & catalogue', url: 'https://github.com/ofrohn/d3-celestial' };
+const catalogueStars: SpaceObject[] = skyCatalog.stars.map(s => ({
+ id:s.id,name:words(s.name,s.name),kind:'star',layer:'sky',color:s.bv>1.3?'#ffbd94':s.bv>.6?'#fff0d8':'#c5ddff',
+ summary:words(`Catalogue star HIP ${s.hip}, shown at its J2000 sky coordinates.`,`Sao danh mục HIP ${s.hip}, hiển thị theo tọa độ thiên cầu J2000.`),
+ notes:[words('Stars in a pattern can be at very different distances from Earth.','Các sao trong cùng hình chòm sao có thể cách Trái Đất những khoảng rất khác nhau.'),words('A lower apparent magnitude indicates a brighter star.','Cấp sao biểu kiến càng nhỏ, ngôi sao càng sáng.')],
+ facts:[fact('Right ascension · J2000','Xích kinh · J2000',s.ra.toFixed(4)+'°'),fact('Declination · J2000','Xích vĩ · J2000',s.dec.toFixed(4)+'°'),fact('Visual magnitude','Cấp sao biểu kiến',String(s.magnitude))],
+ history:[event('J2000','Reference coordinate epoch, not discovery date.','Mốc tham chiếu tọa độ, không phải năm phát hiện.')],sources:[skySource,{label:'Data attribution & license',url:'/data/SKY-SOURCES.md'}],
+ star:{ra:s.ra,dec:s.dec,magnitude:s.magnitude,spectral:'HIP '+s.hip},
+}));
+export const constellations: SpaceObject[] = skyCatalog.constellations.map(c=>({
+ ...constellation(c.id,words(c.en,c.vi),words(`${c.en}: one of the 88 constellations. Rotate the sky to explore its neighbouring patterns.`,`${c.vi}: một trong 88 chòm sao. Xoay bầu trời để khám phá những chòm lân cận.`),c.edges as [string,string][]),sources:[iau,skySource,{label:'Data attribution & license',url:'/data/SKY-SOURCES.md'}],
+}));
+export const spaceObjects: SpaceObject[] = [...constellations, ...satellites, ...missions, ...asteroids, ...stars, ...catalogueStars];
 export const spaceObjectById = new Map(spaceObjects.map(item => [item.id, item]));
 export const spaceName = (id: string, language: Language) => spaceObjectById.get(id)?.name[language] ?? id;

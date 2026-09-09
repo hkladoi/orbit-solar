@@ -5,7 +5,7 @@ import { spacecraftModels, type SpacecraftId } from './spacecraft-models';
 import { ArrowUpRight, BookOpen, ChevronRight, Layers3, Orbit, Satellite, Sparkles, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
-import { defaultSpaceLayers, layerNames, spaceObjectById, spaceObjects, type SpaceObject, type SpaceLayer, type SpaceLayers } from './space-data';
+import { constellations, defaultSpaceLayers, layerNames, spaceObjectById, spaceObjects, type SpaceObject, type SpaceLayer, type SpaceLayers } from './space-data';
 import type { Language } from './i18n';
 
 function ConstellationChart({ item, language }: { item: SpaceObject; language: Language }) {
@@ -48,9 +48,12 @@ export function SpacePortrait({ item, language, small=false }: { item: SpaceObje
 export function SpaceExplorer({language,layers,onLayers,selectedId,onSelect,onOverview}: {language:Language;layers:SpaceLayers;onLayers:(layers:SpaceLayers)=>void;selectedId:string|null;onSelect:(id:string)=>void;onOverview:()=>void}) {
   const vi=language==='vi';const [catalogOpen,setCatalogOpen]=useState(false),[detailsOpen,setDetailsOpen]=useState(false),[filter,setFilter]=useState<SpaceLayer>('sky'),[query,setQuery]=useState('');
   const selected=selectedId?spaceObjectById.get(selectedId):undefined;
+  const family=selected?.edges?selected:constellations.find(c=>c.edges?.some(edge=>edge.includes(selectedId??'')));
+  const siblings=[...new Set(family?.edges?.flat()??[])].map(id=>spaceObjectById.get(id)!);
+  const [skyFilter,setSkyFilter]=useState<'constellation'|'star'>('constellation');
   const select=(id:string)=>{setCatalogOpen(false);setDetailsOpen(false);onSelect(id);};
   const normal=(value:string)=>value.normalize('NFD').replace(/\p{Diacritic}/gu,'').replaceAll('đ','d').toLowerCase();
-  const results=spaceObjects.filter(item=>item.layer===filter&&normal(`${item.name.en} ${item.name.vi}`).includes(normal(query)));
+  const results=spaceObjects.filter(item=>item.layer===filter&&(filter!=='sky'||item.kind===skyFilter)&&normal(`${item.name.en} ${item.name.vi}`).includes(normal(query)));
   const modelNote=selected?.layer==='sky'
     ?vi?'Hướng sao J2000; không hiệu chỉnh chuyển động riêng. Các sao được chiếu lên thiên cầu, không cùng khoảng cách.':'J2000 directions; proper motion omitted. Stars are projected onto a sky sphere, not placed at a shared physical distance.'
     :selected?.layer==='missions'
@@ -58,18 +61,20 @@ export function SpaceExplorer({language,layers,onLayers,selectedId,onSelect,onOv
       :vi?'Chu kỳ tham chiếu được giữ theo đồng hồ mô phỏng. Khoảng cách, kích thước và bề mặt được minh họa; không phải lịch thiên văn.':'Reference periods follow the simulation clock. Distances, sizes and surfaces are illustrative; this is not an ephemeris.';
   return <>
     <button className="space-launch" onClick={()=>setCatalogOpen(true)} aria-label={vi?'Mở danh mục vũ trụ':'Open space atlas'}><Layers3 size={17}/><span>{vi?'Khám phá thêm':'Space atlas'}</span></button>
-    {selected&&<aside className="space-readout" aria-label={vi?'Đối tượng đang chọn':'Selected space object'}>
+    {selected&&<aside className={`space-readout ${selected.layer}`} aria-label={vi?'Đối tượng đang chọn':'Selected space object'}>
       <div className="space-readout-top"><span>{layerNames[selected.layer][language]}</span><button onClick={onOverview} aria-label={vi?'Về tổng quan':'Return to overview'}><X size={18}/></button></div>
       <SpacePortrait item={selected} language={language}/><h2>{selected.name[language]}</h2><p>{selected.summary[language]}</p>
       <dl>{selected.facts.slice(0,2).map(f=><div key={f.label.en}><dt>{f.label[language]}</dt><dd>{f.value}</dd></div>)}</dl>
       <button className="detail-button" onClick={()=>setDetailsOpen(true)}><BookOpen size={17}/>{vi?'Tìm hiểu chi tiết':'Explore in depth'}<ArrowUpRight size={16}/></button>
+      {siblings.length>0&&<nav className="sky-quick-switch" aria-label={vi?'Chuyển nhanh giữa các sao':'Quick star switching'}><span>{family!.name[language]}</span><div>{siblings.map(star=><button key={star.id} aria-pressed={star.id===selectedId} onClick={()=>select(star.id)}>{star.name[language]}</button>)}</div></nav>}
       <small className="space-model-note">{selected.layer==='missions'?(vi?'Chọn trạm tự đặt tốc độ 1 phút/giây; có thể đổi trong cài đặt.':'Selecting a craft sets 1 minute/second; adjust it in settings.'):vi?'Chọn đối tượng khác trong Khám phá thêm.':'Find more objects in Space atlas.'}</small>
     </aside>}
     <Dialog open={catalogOpen} onOpenChange={setCatalogOpen}><DialogContent className="space-catalog space-dialog" showCloseButton={false}>
       <header><div className="dossier-kicker"><Sparkles size={14}/>{vi?'MỞ RỘNG TẦM NHÌN':'BEYOND THE PLANETS'}</div><DialogTitle>{vi?'Bản đồ khám phá':'Space atlas'}</DialogTitle><DialogDescription>{vi?'Chọn một đối tượng để camera đến gần. Bật hoặc tắt từng lớp hiển thị.':'Choose an object to travel closer. Show or hide each layer.'}</DialogDescription><DialogClose className="dossier-close" aria-label={vi?'Đóng bản đồ':'Close atlas'}><X size={20}/></DialogClose></header>
       <div className="atlas-body"><nav className="atlas-categories" aria-label={vi?'Nhóm đối tượng':'Object categories'}>{(Object.keys(defaultSpaceLayers) as SpaceLayer[]).map(key=><button key={key} aria-pressed={filter===key} onClick={()=>{setFilter(key);setQuery('');}}><span>{layerNames[key][language]}</span><small>{spaceObjects.filter(o=>o.layer===key).length}</small></button>)}</nav>
       <section className="atlas-results"><div className="atlas-toolbar"><label className="atlas-switch">{vi?'Hiện lớp này':'Show this layer'}<Switch checked={layers[filter]} onCheckedChange={checked=>onLayers({...layers,[filter]:checked})} aria-label={`${vi?'Hiển thị':'Show'} ${layerNames[filter][language]}`}/></label><input type="search" value={query} onChange={event=>setQuery(event.target.value)} placeholder={vi?'Tìm theo tên…':'Find an object…'} aria-label={vi?'Tìm đối tượng':'Find an object'}/></div>
-      <p className="atlas-context">{filter==='sky'?(vi?'3 hình chòm sao · 23 sao sáng · tọa độ J2000. Nền sao mờ chỉ minh họa.':'3 constellation patterns · 23 bright stars · J2000 coordinates. Faint background stars are decorative.'):filter==='missions'?(vi?'Quỹ đạo minh họa quanh Trái Đất · không phải vị trí trực tiếp':'Illustrative Earth orbits · not live positions'):filter==='moons'?(vi?'5 vệ tinh tiêu biểu · quỹ đạo quanh hành tinh mẹ':'5 selected moons · orbiting their parent planets'):(vi?'Ceres, Vesta và đá–bụi đại diện trong vành đai. Vật thể thực tế thưa hơn nhiều so với hình minh họa.':'Ceres, Vesta and representative belt rocks and dust. Real objects are much more sparsely spaced than shown.')}</p>
+      <p className="atlas-context">{filter==='sky'?(vi?`88 chòm sao · ${spaceObjects.filter(o=>o.star).length} sao trong danh mục · J2000. Xoay camera để xem các hướng khác.`:`88 constellations · ${spaceObjects.filter(o=>o.star).length} catalogue stars · J2000. Rotate the camera to explore other directions.`):filter==='missions'?(vi?'Quỹ đạo minh họa quanh Trái Đất · không phải vị trí trực tiếp':'Illustrative Earth orbits · not live positions'):filter==='moons'?(vi?'5 vệ tinh tiêu biểu · quỹ đạo quanh hành tinh mẹ':'5 selected moons · orbiting their parent planets'):(vi?'Ceres, Vesta và đá–bụi đại diện trong vành đai. Vật thể thực tế thưa hơn nhiều so với hình minh họa.':'Ceres, Vesta and representative belt rocks and dust. Real objects are much more sparsely spaced than shown.')}</p>
+      {filter==='sky'&&<div className="sky-type-filter" aria-label={vi?'Loại đối tượng bầu trời':'Sky object type'}><button aria-pressed={skyFilter==='constellation'} onClick={()=>setSkyFilter('constellation')}>{vi?'Chòm sao':'Constellations'} · 88</button><button aria-pressed={skyFilter==='star'} onClick={()=>setSkyFilter('star')}>{vi?'Sao':'Stars'} · {spaceObjects.filter(o=>o.star).length}</button></div>}
       <div className="atlas-grid">{results.map(item=><button key={item.id} onClick={()=>select(item.id)} className="atlas-object"><SpacePortrait item={item} language={language} small/><span><strong>{item.name[language]}</strong><small>{item.kind==='constellation'?(vi?'Sơ đồ chòm sao':'Constellation chart'):item.kind==='star'?`J2000 · ${item.star!.spectral}`:item.facts[1].value}</small></span><ChevronRight size={15}/></button>)}</div>{results.length===0&&<p className="atlas-empty">{vi?'Không tìm thấy đối tượng.':'No matching objects.'}</p>}
       </section></div>
     </DialogContent></Dialog>
